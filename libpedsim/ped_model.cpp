@@ -68,18 +68,20 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 	region3 = 120;
 	region4 = 160;
 
-	//for (Tagent *agent: agents) {
-	//	int X = agent->getX();
-	//	if(X<= region1) {
-	//		region1list.insert(agent);
-	//	}else if(X <= region2) {
-	//		region2list.insert(agent);
-	//	}else if(X <= region3) {
-	//		region3list.insert(agent);
-	//	}else {
-	//		region4list.insert(agent);
-	//	}
-	//}
+	for (Tagent *agent: agents) {
+		int X = agent->getX();
+		if(X <= region1) {
+			region1list.insert(agent);
+		}else if(X <= region2) {
+			region2list.insert(agent);
+		}else if(X <= region3) {
+			region3list.insert(agent);
+		}else {
+			region4list.insert(agent);
+		}
+	}
+	//for (auto it=region1list.begin(); it != region1list.end(); ++it)     
+	//cout << ' ' << *it;
 
 
 	// Set up heatmap (relevant for Assignment 4)
@@ -142,39 +144,93 @@ void Ped::Model::tick()
 			agent->setY(agent->getDesiredY());
 		}
 	}
-	//OPENMP IMPLEMENTATION
+	//OPENMP IMPLEMENTATION for (std::set<const Ped::Tagent*>::iterator neighborIt = neighbors.begin(); neighborIt != neighbors.end(); ++neighborIt)
 	if(this->implementation == OMP) {
-		#pragma omp parallel shared(allAgents) num_threads(4) //for
-		#pragma omp single 
+		#pragma omp parallel shared(allAgents) num_threads(4)//for
 		{
-		for (Tagent *agent: allAgents) {
-			//agent->setX(agent->getDesiredX());
-			//agent->setY(agent->getDesiredY());
+		#pragma omp single
+		{
+		for (std::set<Tagent*>::iterator listIt = region1list.begin(); listIt != region1list.end(); ++listIt){
+			(*listIt)->computeNextDesiredPosition();
+			int Xpos = (*listIt)->getX();
+			//int XposNext = (*listIt)->getDesiredX();
+			move(*listIt);
+			if(Xpos > region1) {
+			cout << "kommer vi hit";
+			#pragma omp critical
+			{
+				region1list.erase(*listIt);
+				region2list.insert(*listIt);
+			}
 
-			int Xpos = agent->getX();
-			int XposNext = agent->getDesiredX();
-
-			if(Xpos < region1) {
-				#pragma omp task
-				agent->computeNextDesiredPosition();
-				movecrit(agent);
-
-			} else if(Xpos < region2) {
-				#pragma omp task
-				agent->computeNextDesiredPosition();
-				movecrit(agent);
-		
-			} else if(Xpos < region3){
-				#pragma omp task
-				agent->computeNextDesiredPosition();
-				movecrit(agent);
-			} else {
-				#pragma omp task
-				agent->computeNextDesiredPosition();
-				movecrit(agent);
+			}
+		}
+		#pragma omp taskwait
+		#pragma omp task
+		for (std::set<Tagent*>::iterator listIt = region2list.begin(); listIt != region2list.end(); ++listIt){
+			(*listIt)->computeNextDesiredPosition();
+			int Xpos = (*listIt)->getX();
+			//int XposNext = (*listIt)->getDesiredX();
+			move(*listIt);
+			if(Xpos <= region1) {
+				cout << "kommer vi hit2 \n";
+				#pragma omp critical
+				{
+				region2list.erase(*listIt);
+				region1list.insert(*listIt);
+				}
+			} else if(Xpos > region2) {
+				#pragma omp critical
+				{
+				cout << "kommer vi hit3";
+				region2list.erase(*listIt);
+				region3list.insert(*listIt);
+				}
+			}
+		}
+		#pragma omp taskwait
+		#pragma omp task
+		for (std::set<Tagent*>::iterator listIt = region3list.begin(); listIt != region3list.end(); ++listIt){
+			(*listIt)->computeNextDesiredPosition();
+			int Xpos = (*listIt)->getX();
+			//int XposNext = (*listIt)->getDesiredX();
+			move(*listIt);
+			if(Xpos <= region2) {
+				cout << "kommer vi hit4";
+				#pragma omp critical
+				{
+				region3list.erase(*listIt);
+				region2list.insert(*listIt);
+				}
+			} else if(Xpos > region3) {
+				cout << "kommer vi hit5";
+				#pragma omp critical
+				{
+				region3list.erase(*listIt);
+				region4list.insert(*listIt);
+				}
+			}
+		}
+		#pragma omp taskwait
+		#pragma omp task
+		for (std::set<Tagent*>::iterator listIt = region4list.begin(); listIt != region4list.end(); ++listIt){
+			(*listIt)->computeNextDesiredPosition();
+			int Xpos = (*listIt)->getX();
+			//int XposNext = (*listIt)->getDesiredX();
+			move(*listIt);
+			if(Xpos <= region3) {
+				#pragma omp critical
+				{
+				cout << "kommer vi hit6";
+				region4list.erase(*listIt);
+				region3list.insert(*listIt);
+				}
 			}
 		}
 		}
+		}
+		#pragma omp taskwait
+
 
 	}
 	//VECTOR+OMP IMPLEMENTATION
