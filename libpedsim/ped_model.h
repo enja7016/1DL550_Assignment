@@ -115,14 +115,14 @@ namespace Ped{
 #define WEIGHTSUM 273
 
 		// The heatmap representing the density of agents
-		int ** heatmap;
-		int * d_heatmap;
+		int **heatmap;
+		int **d_heatmap;
 		// The scaled heatmap that fits to the view
-		int ** scaled_heatmap;
-		int * d_scaled_heatmap;
+		int **scaled_heatmap;
+		int **d_scaled_heatmap;
 		// The final heatmap: blurred and scaled to fit the view
 		int ** blurred_heatmap;
-		int * d_blurred_heatmap;
+		int **d_blurred_heatmap;
 
 		int *desiredX;
 		int *desiredY;
