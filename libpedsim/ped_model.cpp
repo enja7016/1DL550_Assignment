@@ -147,7 +147,8 @@ void Ped::Model::tick()
 			yReg = _mm_load_ps(&Y[i]);
 			destXReg = _mm_load_ps(&destX[i]); 
 			destYReg = _mm_load_ps(&destY[i]);
-			// Get difference
+			// Get difference0x2b459e401010
+
 			__m128 Xdiff = _mm_sub_ps(destXReg, xReg);
 			__m128 Ydiff = _mm_sub_ps(destYReg, yReg);
 			// Get length
@@ -201,32 +202,41 @@ void Ped::Model::tick()
 		}
 	}
 	if(this->implementation == TASK) {
+		for (int i = 0; i < agents.size(); i++)
+		{
+			desiredX[i] =(int) agents[i]->getDesiredX();
+			desiredY[i] =(int) agents[i]->getDesiredY();
+		}
+		updateHeatmapCuda();
+
 		#pragma omp parallel shared(allAgents) num_threads(4) //for
 		#pragma omp single 
 		{
-		for (Tagent *agent: allAgents) {
-			int Xpos = agent-> getX();
+		for (int i = 0; i < agents.size(); i++) {
+			int Xpos = agents[i]-> getX();
+			//cout << (int) agents[i]->getDesiredX() << "\n";
 			if(Xpos < region1) {
 				#pragma omp task
-				agent->computeNextDesiredPosition();
-				move(agent);
+				agents[i]->computeNextDesiredPosition();
+				move(agents[i]);
 
 			} else if(Xpos < region2) {
 				#pragma omp task
-				agent->computeNextDesiredPosition();
-				move(agent);
+				agents[i]->computeNextDesiredPosition();
+				move(agents[i]);
 		
 			} else if(Xpos < region3){
 				#pragma omp task
-				agent->computeNextDesiredPosition();
-				move(agent);
+				agents[i]->computeNextDesiredPosition();
+				move(agents[i]);
 			} else {
 				#pragma omp task
-				agent->computeNextDesiredPosition();
-				move(agent);
+				agents[i]->computeNextDesiredPosition();
+				move(agents[i]);
 			}
+
 		}
-		updateHeatmapCuda();
+
 		}
 
 	}
@@ -393,7 +403,7 @@ void Ped::Model::movecrit(Ped::Tagent *agent)
 	}
 }
 
-/// Returns the list of neighbors within dist of the point x/y. This
+/// Returns the list of neighbors within hej" dist of the point x/y. This
 /// can be the position of an agent, but it is not limited to this.
 /// \date    2012-01-29
 /// \return  The list of neighbors
