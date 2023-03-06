@@ -15,59 +15,60 @@ using namespace std;
 	SET HEATMAP FUNCTIONS
 -----------------------------*/
 
+__global__ void setupHeatmap(int* hm, int **heatmap)
+{
+	int i = blockIdx.x * blockDim.x + threadId.x;
+	heatmap[i] = hm + SIZE * i;
+}
+
+__global__ void setupScaledHeatmap(int *shm, int** scaled_heatmap)
+{
+	int i = blockIdx.x * blockDim.x + threadId.x;
+	scaled_heatmap[i] = shm + SCALED_SIZE*I;
+}
+
 void Ped::Model::setupHeatmapCuda()
 {
-	// Allocate memory on CPU
-	int *hm = (int*)calloc(SIZE*SIZE, sizeof(int));
-	int *shm = (int*)malloc(SCALED_SIZE*SCALED_SIZE*sizeof(int));
-	int *bhm = (int*)malloc(SCALED_SIZE*SCALED_SIZE*sizeof(int));
+	
+	int *hm, *shm, *bhm;
+	cudaMalloc(&hm, SIZE * SIZE * sizeof(int));
+    cudaMalloc(&shm, SCALED_SIZE * SCALED_SIZE * sizeof(int));
+    cudaMalloc(&heatmap, SIZE * sizeof(int*));
+    cudaMalloc(&scaled_heatmap, SCALED_SIZE * sizeof(int*));
+	cudaMallocHost(&blurred_heatmap, SCALED_SIZE * sizeof(int*));
+	cudaMallocHost(&bhm, SCALED_SIZE * SCALED_SIZE * sizeof(int));
 
-	heatmap = (int**)malloc(SIZE*sizeof(int*));
-	scaled_heatmap = (int**)malloc(SCALED_SIZE*sizeof(int*));
-	blurred_heatmap = (int**)malloc(SCALED_SIZE*sizeof(int*));
+	cudaMalloc(&desiredX, agents.size() * sizeof(int));
+    cudaMalloc(&desiredY, agents.size() * sizeof(int));
 
-	// Initialize values, point to right memory
-	for (int i = 0; i < SIZE; i++)
-	{
-		heatmap[i] = hm + SIZE*i;
-	}
+
+	cudaMemset(hm, 0, SIZE * SIZE);
+    cudaMemset(shm, 0, SCALED_SIZE * SCALED_SIZE);
+    cudaMemset(bhm, 1, SCALED_SIZE * SCALED_SIZE);
+
+	setupHeatmap<<<1,SIZE>>>(hm,heatmap);
+	cudaDeviceSynchronize();
+
+	setupScaledHeatmap<<<CELLSIZE,SIZE>>>(shm,scaled_heatmap);
+	cudaDeviceSynchronize();
+
 	for (int i = 0; i < SCALED_SIZE; i++)
 	{
-		scaled_heatmap[i] = shm + SCALED_SIZE*i;
 		blurred_heatmap[i] = bhm + SCALED_SIZE*i;
-	}
 
-
-	desiredX = (int*)malloc(agents.size()*sizeof(int));
-	desiredY = (int*)malloc(agents.size()*sizeof(int));
-	//cudaMallocHost(&desiredX, agents.size()*sizeof(int));
-	//cudaMallocHost(&desiredY, agents.size()*sizeof(int));
-	
-	cudaMalloc(&d_desiredX, agents.size()*sizeof(int));
-	cudaMalloc(&d_desiredY, agents.size()*sizeof(int));
-
-
-
-	// Allocate memory on GPU
-	cudaMalloc(&d_heatmap, SIZE*sizeof(int));
-	cudaMalloc(&d_scaled_heatmap, SCALED_SIZE*sizeof(int));
-	cudaMalloc(&d_blurred_heatmap, SCALED_SIZE*sizeof(int));
-
-	// Copy memory from host to device
-	cudaMemcpy(d_heatmap, heatmap, SIZE*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_scaled_heatmap, scaled_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_blurred_heatmap, blurred_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
 }
 
 /* ---------------------------
 	UPPDATE HEATMAP FUNCTIONS
   --------------------------*/ 
 
-__global__ void kernel_fade(int *dev_heatmap)
+__global__ void kernel_fade(int **heatmap)
 {
-	int x = blockIdx.x * blockDim.x + threadIdx.x;	
-	int y = blockIdx.y * blockDim.y + threadIdx.y;	
-	dev_heatmap[y*SIZE + x] = (int)round(dev_heatmap[y*SIZE + x] * 0.80);
+	int i = blockIdx.x * blockDim.x + threadIdx.x;	
+	// fade one row at a time
+	for (int row = 0; row < SIZE; row++) {
+      heatmap[row][i] = (int)round(heatmap[row][tid] * 0.80);
+    }
 }
 
 __global__ void kernel_agents(int *dev_heatmap, int size_agents, int *desiredX, int *desiredY)
@@ -147,7 +148,7 @@ void Ped::Model::updateHeatmapCuda()
 
 	cudaMemcpy(d_desiredX, desiredX, agents.size() * sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_desiredY, desiredY, agents.size() * sizeof(int), cudaMemcpyHostToDevice);
-	//cout << d_desiredX[0] << "\n";
+	//cout << d_desiredX[0]	<< "\n";
 
 	dim3 threads_per_block(32, 32);
     dim3 num_blocks(SIZE / threads_per_block.x, SIZE / threads_per_block.y);
@@ -168,6 +169,7 @@ void Ped::Model::updateHeatmapCuda()
 	// Blur heatmap
 	dim3 num_blocks_SCALED(SCALED_SIZE / threads_per_block.x, SCALED_SIZE / threads_per_block.y);
 	kernel_blur<<<num_blocks_SCALED,threads_per_block >>>(d_heatmap, d_blurred_heatmap, d_scaled_heatmap);
+	//cout << d_blurred_heatmap[0] << "\n";
 
 	cudaMemcpy(blurred_heatmap, d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
 }

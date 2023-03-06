@@ -207,6 +207,7 @@ void Ped::Model::tick()
 			desiredX[i] =(int) agents[i]->getDesiredX();
 			desiredY[i] =(int) agents[i]->getDesiredY();
 		}
+		cout << "DESIRED X LOOKS LIKE THIS" << desiredX[0] << "\n";
 		updateHeatmapCuda();
 
 		#pragma omp parallel shared(allAgents) num_threads(4) //for
