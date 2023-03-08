@@ -17,8 +17,11 @@ using namespace std;
 
 void Ped::Model::setupHeatmapCuda()
 {
-	cout << "malloc";
 	// Allocate memory on CPU
+	cudaError_t cudaStatus;
+
+	// Choose which GPU to run on, change this on a multi-GPU system.
+
 	int *hm = (int*)calloc(SIZE*SIZE, sizeof(int));
 	int *shm = (int*)malloc(SCALED_SIZE*SCALED_SIZE*sizeof(int));
 	int *bhm = (int*)malloc(SCALED_SIZE*SCALED_SIZE*sizeof(int));
@@ -38,29 +41,52 @@ void Ped::Model::setupHeatmapCuda()
 		blurred_heatmap[i] = bhm + SCALED_SIZE*i;
 	}
 
-
-	int *desiredX = (int*)malloc(agents.size()*sizeof(int));
-	int *desiredY = (int*)malloc(agents.size()*sizeof(int));
-
-	for (int i = 0; i < agents.size(); i++)
-	{
-		Ped::Tagent* agent = agents[i];
-		desiredX[i] = agent->getDesiredX();
-		desiredY[i] = agent->getDesiredY();
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
 	}
 
-	cudaMalloc(&d_desiredX, agents.size()*sizeof(int));
-	cudaMalloc(&d_desiredY, agents.size()*sizeof(int));
+	desiredX = (float*)malloc(agents.size()*sizeof(float));
+	desiredY = (float*)malloc(agents.size()*sizeof(float));
+
+
+	cudaStatus = cudaMalloc(&d_desiredX, agents.size()*sizeof(float));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "malloc d_desiredX fail\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
+	} else {printf("success malloc X\n");}
+
+	cudaStatus = cudaMalloc(&d_desiredY, agents.size()*sizeof(float));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "malloc d_desiredX fail\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
+	} else {printf("success malloc Y\n");}
 
 	// Allocate memory on GPU
-	cudaMalloc(&d_heatmap, SIZE*sizeof(int));
-	cudaMalloc(&d_scaled_heatmap, SCALED_SIZE*sizeof(int));
-	cudaMalloc(&d_blurred_heatmap, SCALED_SIZE*sizeof(int));
+	cudaStatus = cudaMalloc(&d_heatmap, SIZE*sizeof(int));
+	cudaStatus = cudaMalloc(&d_scaled_heatmap, SCALED_SIZE*sizeof(int));
+	cudaStatus = cudaMalloc(&d_blurred_heatmap, SCALED_SIZE*sizeof(int));
 
 	// Copy memory from host to device
-	cudaMemcpy(d_heatmap, heatmap, SIZE*sizeof(int), cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpy(d_heatmap, heatmap, SIZE*sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "copy scaled fail\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
+	} else {printf("success malloc Y\n");}
 	cudaMemcpy(d_scaled_heatmap, scaled_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_blurred_heatmap, blurred_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
+Error:
+	if (cudaStatus != 0){
+		fprintf(stderr, "Cuda heatmap setup fail.\n"); // This is not a good thing
+	}
+	else{
+		fprintf(stderr, "Cuda heatmap setup succeeded.\n"); // This is a good thing
+	}
 }
 
 /* ---------------------------
@@ -78,7 +104,7 @@ __global__ void kernel_fade(int *dev_heatmap)
 	}
 }
 
-__global__ void kernel_agents(int *dev_heatmap, int size_agents, int *desiredX, int *desiredY)
+__global__ void kernel_agents(int *dev_heatmap, int size_agents, float *desiredX, float *desiredY)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if(i < size_agents){
@@ -86,8 +112,6 @@ __global__ void kernel_agents(int *dev_heatmap, int size_agents, int *desiredX, 
 		int y = desiredY[i];
 
 		if(x>=0 && x<SIZE && y>=0 && y<SIZE)
-			// intensify heat for better color results
-			//&dev_heatmap[y][x] += 40;
 			atomicAdd(&dev_heatmap[y*SIZE + x], 40);
 	}
 }
@@ -106,8 +130,6 @@ __global__ void kernel_scale(int *dev_heatmap, int *dev_scaled_heatmap)
 {
 	int x = blockIdx.x * blockDim.x + threadIdx.x;	
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
-	// xs = x / SIZE;
-	// ys = y % SIZE;
 	if (x < SCALED_SIZE && y < SCALED_SIZE)
 	{
 		int id = y*SIZE + x;
@@ -155,70 +177,72 @@ __global__ void kernel_blur(int *dev_heatmap, int *dev_blurred_heatmap, int *dev
 
 void Ped::Model::updateHeatmapCuda() 
 {
-	// Create streams
-	cudaStream_t stream1, stream2, stream3;
-	cudaStreamCreate(&stream1);
-	cudaStreamCreate(&stream2);
-	cudaStreamCreate(&stream3);
+	cudaError_t cudaStatus;
 
-	cudaEvent_t ev1;
-	cudaEventCreate(&ev1);
-	// Create events
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
+	}
+
+	cudaStatus = cudaMemcpy(d_desiredX, desiredX, agents.size()*sizeof(float), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "fail copy desiredx\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
+	} else {
+		fprintf(stderr, "success copy desiredx\n");
+	}
+
+	cudaStatus = cudaMemcpy(d_desiredY, desiredY, agents.size()*sizeof(float), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "fail copy desiredy\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
+	} else {
+		fprintf(stderr, "success copy desiredy\n");
+	}
 
 	// Fade heatmap
-	kernel_fade<<<CELLSIZE, SIZE, 0, stream1>>>(d_heatmap);
-	cudaEventRecord(ev1, stream1);
+	kernel_fade<<<CELLSIZE, SIZE>>>(d_heatmap);
+	kernel_agents<<<1, agents.size()>>>(d_heatmap, agents.size(), d_desiredX, d_desiredY);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "fail copy desiredy\n");
+		fprintf(stderr, "%s.\n", cudaGetErrorString(cudaGetLastError()));
+		goto Error;
+	} else {
+		fprintf(stderr, "x\n");
+		fprintf(stderr, "%f.\n", desiredX[0]);
+		fprintf(stderr, "y\n");
+		fprintf(stderr, "%f.\n", desiredY[0]);
 
-	cudaMemcpyAsync(d_desiredX, desiredX, agents.size()*sizeof(Ped::Tagent), cudaMemcpyHostToDevice, stream2);
-	cudaMemcpyAsync(d_desiredY, desiredY, agents.size()*sizeof(Ped::Tagent), cudaMemcpyHostToDevice, stream2);
-
-	cudaStreamWaitEvent(stream1, ev1);
-
-	kernel_agents<<<1, agents.size(), 0, stream1>>>(d_heatmap, agents.size(), d_desiredX, d_desiredY);
-
-	// Count how many agents want to go to each location
-
-		// Count how many agents want to go to each location
-	
-	// for (int i = 0; i < agents.size(); i++)
-	// {
-		// Ped::Tagent* agent = agents[i];
-		// int x = agent->getDesiredX();
-		// int y = agent->getDesiredY();
-
-		// if (x < 0 || x >= SIZE || y < 0 || y >= SIZE)
-		// {
-			// continue;
-		// }
-		// // intensify heat for better color results
-		// d_heatmap[y][x] += 40;
-	// }
-
-
-
-	// int size_agents = agents.size();
-	// Ped::Tagent *d_agents;
-	// cudaMalloc((void **)&d_agents, size_agents*sizeof(Ped::Tagent));
-	// cudaMemcpyAsync(d_agents, agents, size_agents*sizeof(Ped::Tagent), cudaMemcpyHostToDevice, stream2);
-	// cudaStreamWaitEvent(stream1, ev1);
-	// kernel_agents<<<1, size_agents, 0, stream1>>>(d_heatmap, d_agents, size_agents);
-	// free(d_agents)
-	// free(*d_agents)
+	}
 
 	//Clip heatmap
-	kernel_clip<<<1, SIZE, 0, stream1>>>(d_heatmap);
+	kernel_clip<<<1, SIZE>>>(d_heatmap);
 
 	//Scale heatmap
-	kernel_scale<<<1, SIZE, 0, stream2>>>(d_heatmap, d_scaled_heatmap);
+	kernel_scale<<<1, SIZE>>>(d_heatmap, d_scaled_heatmap);
 
 	// // Blur heatmap
-	kernel_blur<<<1, SIZE, 0, stream3>>>(d_heatmap, d_blurred_heatmap, d_scaled_heatmap);
+	kernel_blur<<<1, SIZE>>>(d_heatmap, d_blurred_heatmap, d_scaled_heatmap);
 
 	//cudaStreamSynchronize();
 	// Copy memory from host to device
-	cudaMemcpy(heatmap, d_heatmap, SIZE*sizeof(int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(scaled_heatmap, d_scaled_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(blurred_heatmap, d_blurred_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(heatmap, d_heatmap, SIZE*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(scaled_heatmap, d_scaled_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(blurred_heatmap, d_blurred_heatmap, SCALED_SIZE*sizeof(int), cudaMemcpyDeviceToHost);
+
+
+
+Error:
+	if (cudaStatus != 0){
+		fprintf(stderr, "Cuda does not seem to be working properly.\n"); // This is not a good thing
+	}
+	else{
+		fprintf(stderr, "Cuda update succeeded.\n"); // This is a good thing
+	}
 
 }
 

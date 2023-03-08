@@ -204,18 +204,17 @@ void Ped::Model::tick()
 		#pragma omp parallel shared(allAgents) num_threads(4) //for
 		#pragma omp single 
 		{
+		int i = 0;
 		for (Tagent *agent: allAgents) {
 			int Xpos = agent-> getX();
 			if(Xpos < region1) {
 				#pragma omp task
 				agent->computeNextDesiredPosition();
 				move(agent);
-
 			} else if(Xpos < region2) {
 				#pragma omp task
 				agent->computeNextDesiredPosition();
 				move(agent);
-		
 			} else if(Xpos < region3){
 				#pragma omp task
 				agent->computeNextDesiredPosition();
@@ -225,9 +224,15 @@ void Ped::Model::tick()
 				agent->computeNextDesiredPosition();
 				move(agent);
 			}
+
 		}
-		updateHeatmapCuda();
 		}
+		updateHeatmapCuda(); 
+		for (int i = 0 ; i < agents.size() ; i++) {
+			desiredX[i] = agents[i]->getDesiredX();
+			desiredY[i] = agents[i]->getDesiredY();
+			//move(agents[i]);
+		} 
 
 	}
 

@@ -124,11 +124,11 @@ namespace Ped{
 		int ** blurred_heatmap;
 		int * d_blurred_heatmap;
 
-		int *desiredX;
-		int *desiredY;
+		float *desiredX;
+		float *desiredY;
 
-		int *d_desiredX;
-		int *d_desiredY;
+		float *d_desiredX;
+		float *d_desiredY;
 
 		void setupHeatmapCuda();
 		void setupHeatmapSeq();
