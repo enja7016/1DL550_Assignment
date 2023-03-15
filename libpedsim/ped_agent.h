@@ -18,6 +18,7 @@
 
 #include <vector>
 #include <deque>
+#include <math.h>
 
 using namespace std;
 
@@ -29,24 +30,52 @@ namespace Ped {
 		Tagent(int posX, int posY);
 		Tagent(double posX, double posY);
 
-		// Returns the coordinates of the desired position
-		int getDesiredX() const { return desiredPositionX; }
-		int getDesiredY() const { return desiredPositionY; }
+		/* SETTERS */
+		void setallX(float *newallX) { allX = newallX; }
+		void setallY(float *newallY) { allY = newallY; }
+
+		void setdestX(float *newdX) { destX = newdX; };
+		void setdestY(float *newdY) { destY = newdY; };
+		void setdestR(float *newdR) { destR = newdR; };
+
+		void setId(int newid) { id = newid; };
 
 		// Sets the agent's position
-		void setX(int newX) { x = newX; }
-		void setY(int newY) { y = newY; }
+		void setX(int newX) { x = newX; };
+		void setY(int newY) { y = newY; };
+
+		void setX(float newX) { x = (int) round(newX); };
+		void setY(float newY) { y = (int) round(newY); };
+
+		/* GETTERS */
+		// Position of agent defined by x and y
+		float getX() const { return x; };
+		float getY() const { return y; };
+
+		float getDestX();
+		float getDestY();
+		float getDestR();
+
+		int* getXAddr() { return &x; };
+		int* getYAddr() { return &y; };
+
+		// Returns the coordinates of the desired position
+		int getDesiredX() const { return desiredPositionX; };
+		int  getDesiredY() const { return desiredPositionY; };
+
+        int waypointSize() {return waypoints.size();};
+
+		/* FUNCTIONS */
+		// Adds a new waypoint to reach for this agent
+		void addWaypoint(Twaypoint* wp);
 
 		// Update the position according to get closer
 		// to the current destination
 		void computeNextDesiredPosition();
 
-		// Position of agent defined by x and y
-		int getX() const { return x; };
-		int getY() const { return y; };
+		void destInit();
 
-		// Adds a new waypoint to reach for this agent
-		void addWaypoint(Twaypoint* wp);
+		void updateDest();
 
 	private:
 		Tagent() {};
@@ -54,6 +83,13 @@ namespace Ped {
 		// The agent's current position
 		int x;
 		int y;
+		int id;
+
+		float *allX;
+		float *allY;
+		float *destX;
+		float *destY;
+		float *destR;
 
 		// The agent's desired next position
 		int desiredPositionX;

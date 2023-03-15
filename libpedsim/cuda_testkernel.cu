@@ -38,7 +38,7 @@ int cuda_test()
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
 	cudaStatus = cudaDeviceReset();
 	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaDeviceReset failed!\n");
+		fprintf(stderr, "%s\n", cudaGetErrorString(cudaStatus));
 		return 1;
 	}
 

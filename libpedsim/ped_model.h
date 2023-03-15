@@ -14,6 +14,8 @@
 #include <vector>
 #include <map>
 #include <set>
+#include "cuda_runtime.h"	
+#include "device_launch_parameters.h"
 
 #include "ped_agent.h"
 
@@ -22,7 +24,7 @@ namespace Ped{
 
 	// The implementation modes for Assignment 1 + 2:
 	// chooses which implementation to use for tick()
-	enum IMPLEMENTATION { CUDA, VECTOR, OMP, PTHREAD, SEQ };
+	enum IMPLEMENTATION { CUDA, VECTOR, OMP, PTHREAD, SEQ, TASK, MOVESEQ};
 
 	class Model
 	{
@@ -36,6 +38,23 @@ namespace Ped{
 
 		// Returns the agents of this scenario
 		const std::vector<Tagent*> getAgents() const { return agents; };
+
+		// Returns the destinations of this scenario
+		const std::vector<Twaypoint*> getDest() const { return destinations; };
+
+
+
+		// Returns the the X vector of this scenario
+		float *getVecX() const { return X; };
+
+		// Returns the the Y vector of this scenario
+		float *getVecY() const { return Y; };
+
+		// Returns the the X vector of this scenario
+		float *getVecXdes() const { return destX; };
+
+		// Returns the the Y vector of this scenario
+		float *getVecYdes() const { return destY; };
 
 		// Adds an agent to the tree structure
 		void placeAgent(const Ped::Tagent *a);
@@ -61,16 +80,30 @@ namespace Ped{
 		// The waypoints in this scenario
 		std::vector<Twaypoint*> destinations;
 
+		int region1, region2, region3, region4;
+
+		// Vector of x and y coordinates in this scenario
+		float *X;
+		float *Y;
+		// Vector of x and y coordinates in this scenario
+		float *destX;
+		float *destY;
+		float *destR;
+
+		std::set<Ped::Tagent*> region1list;
+		std::set<Ped::Tagent*> region2list;
+		std::set<Ped::Tagent*> region3list;
+		std::set<Ped::Tagent*> region4list;
+
 		// Moves an agent towards its next position
 		void move(Ped::Tagent *agent);
+		void movecrit(Ped::Tagent *agent);
 
 		////////////
 		/// Everything below here won't be relevant until Assignment 3
 		///////////////////////////////////////////////
-
 		// Returns the set of neighboring agents for the specified position
 		set<const Ped::Tagent*> getNeighbors(int x, int y, int dist) const;
-
 		////////////
 		/// Everything below here won't be relevant until Assignment 4
 		///////////////////////////////////////////////
@@ -78,18 +111,34 @@ namespace Ped{
 #define SIZE 1024
 #define CELLSIZE 5
 #define SCALED_SIZE SIZE*CELLSIZE
+#define WEIGHTSUM 273
 
 		// The heatmap representing the density of agents
 		int ** heatmap;
+		int * d_heatmap;
 
 		// The scaled heatmap that fits to the view
 		int ** scaled_heatmap;
+		int * d_scaled_heatmap;
 
 		// The final heatmap: blurred and scaled to fit the view
 		int ** blurred_heatmap;
+		int * d_blurred_heatmap;
 
+		// Desired positions of agents
+		int *desiredX;
+		int *desiredY;
+		int *d_desiredX;
+		int *d_desiredY;
+
+		// Number of agents in scenario
+		int agentsSize;
+
+		void setupHeatmapCuda();
 		void setupHeatmapSeq();
 		void updateHeatmapSeq();
+		void updateHeatmapCuda();
+	
 	};
 }
 #endif
